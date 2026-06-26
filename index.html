@@ -143,12 +143,8 @@
 </div>
 
 <script>
-const DIRECT = "http://43.229.132.25:80";
-const PATH   = () => document.getElementById("streamPath").value.trim();
 const PROXY  = () => {
-  const h = document.getElementById("proxyHost").value.trim() || "localhost";
-  const p = document.getElementById("proxyPort").value.trim() || "8080";
-  return "http://" + h + ":" + p;
+  return "https://stream-prpxy-production.up.railway.app";
 };
 
 let player = null;
