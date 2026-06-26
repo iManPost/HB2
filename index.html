@@ -3,174 +3,168 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Video Player</title>
-
-  <!-- Video.js -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
-  <!-- videojs-contrib-hls / http-streaming (built into Video.js 7+) -->
-  <!-- HLS.js fallback -->
+  <title>Stream Player</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
-
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body{
-      width:100%;height:100%;
-      background:#07070d;
+    body{
+      background:#07070d;color:#ddd;
+      font-family:'Segoe UI',system-ui,sans-serif;
+      min-height:100vh;display:flex;
+      flex-direction:column;align-items:center;
+      justify-content:center;padding:20px 14px;
+    }
+    .wrap{width:100%;max-width:960px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .topbar h1{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
+    .dot{width:9px;height:9px;border-radius:50%;background:#333;transition:background .4s}
+    .dot.live{background:#e63946;box-shadow:0 0 7px #e6394699;animation:blink 1.8s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+    .video-wrap{
+      position:relative;width:100%;aspect-ratio:16/9;
+      background:#111;border-radius:10px;overflow:hidden;
+      box-shadow:0 8px 48px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);
+    }
+    video{width:100%;height:100%;display:block;background:#000}
+
+    .overlay{
+      position:absolute;inset:0;
       display:flex;flex-direction:column;
       align-items:center;justify-content:center;
-      font-family:'Segoe UI',system-ui,sans-serif;
-      color:#ddd;
+      background:rgba(7,7,13,.8);transition:opacity .3s;
     }
-    .wrap{width:100%;max-width:960px;padding:16px}
-    h1{font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:#555;margin-bottom:10px}
-
-    /* Video.js skin overrides */
-    .video-js{width:100%!important;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#111}
-    .vjs-big-play-button{
-      top:50%!important;left:50%!important;
-      transform:translate(-50%,-50%)!important;
-      border-radius:50%!important;
-      width:64px!important;height:64px!important;
-      line-height:64px!important;
-      border:2px solid rgba(255,255,255,.25)!important;
-      background:rgba(10,10,20,.7)!important;
+    .overlay.hide{opacity:0;pointer-events:none}
+    .spinner{
+      width:46px;height:46px;
+      border:3px solid rgba(255,255,255,.08);
+      border-top-color:#e63946;border-radius:50%;
+      animation:spin .8s linear infinite;margin-bottom:12px;
     }
-    .vjs-big-play-button:hover{background:rgba(230,57,70,.85)!important;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .overlay p{font-size:.78rem;color:#555;letter-spacing:.06em}
 
-    /* status bar */
     .statusbar{
-      margin-top:10px;display:flex;align-items:center;
-      justify-content:space-between;gap:8px;
-      padding:0 4px;font-size:.7rem;
+      margin-top:9px;display:flex;gap:8px;
+      font-size:.69rem;font-family:monospace;
+      color:#2e2e4e;align-items:center;
     }
-    .dot{width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0;transition:background .4s}
-    .dot.live{background:#e63946;box-shadow:0 0 6px #e6394688;animation:blink 1.8s ease-in-out infinite}
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-    .url{color:#333;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-    .badge{color:#4caf7d;font-weight:700;letter-spacing:.08em;flex-shrink:0}
+    .statusbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+    .badge{color:#4caf7d;font-weight:700;flex-shrink:0}
 
-    /* error box */
     #errbox{
-      display:none;margin-top:12px;padding:14px 18px;
+      display:none;margin-top:10px;padding:14px 18px;
       background:#1a0a0a;border:1px solid #4a1010;border-radius:8px;
-      font-size:.8rem;line-height:1.6;color:#e07070;
+      font-size:.78rem;line-height:1.7;color:#e07070;
     }
-    #errbox ul{margin:.4em 0 0 1.2em}
-    #errbox a{color:#e63946;text-decoration:none}
-    #errbox a:hover{text-decoration:underline}
+    #errbox code{background:#2a1010;padding:1px 5px;border-radius:3px;font-size:.72rem}
+    .retry{
+      margin-top:8px;padding:7px 18px;background:#e63946;color:#fff;
+      border:none;border-radius:6px;font-size:.75rem;font-weight:700;
+      cursor:pointer;
+    }
+    .retry:hover{background:#c1121f}
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>▶ Stream Player</h1>
+  <div class="topbar">
+    <h1>▶ Stream Player</h1>
+    <div class="dot" id="dot"></div>
+  </div>
 
-  <video
-    id="myVideo"
-    class="video-js vjs-default-skin vjs-big-play-centered"
-    controls
-    preload="auto"
-    playsinline
-    crossorigin="anonymous">
-  </video>
+  <div class="video-wrap">
+    <video id="vid" controls playsinline></video>
+    <div class="overlay" id="overlay">
+      <div class="spinner"></div>
+      <p id="overlayMsg">กำลังโหลด…</p>
+    </div>
+  </div>
 
   <div class="statusbar">
-    <div class="dot" id="dot"></div>
-    <span class="url" id="urlLabel"></span>
+    <span id="urlLabel">—</span>
     <span class="badge" id="badge">HLS</span>
   </div>
 
-  <div id="errbox"></div>
+  <div id="errbox">
+    <span id="errMsg"></span><br>
+    <button class="retry" onclick="start()">🔄 ลองใหม่</button>
+  </div>
 </div>
 
 <script>
 const STREAM = "http://43.229.132.25:80/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8";
-document.getElementById("urlLabel").textContent = STREAM;
 
-/* ── helper ── */
-function setLive(on){ document.getElementById("dot").className = "dot" + (on?" live":""); }
-function showErr(html){ const b=document.getElementById("errbox"); b.innerHTML=html; b.style.display="block"; }
-function hideErr(){ document.getElementById("errbox").style.display="none"; }
+const vid       = document.getElementById("vid");
+const overlay   = document.getElementById("overlay");
+const overlayMsg= document.getElementById("overlayMsg");
+const dot       = document.getElementById("dot");
+const urlLabel  = document.getElementById("urlLabel");
+const badge     = document.getElementById("badge");
+const errbox    = document.getElementById("errbox");
+const errMsg    = document.getElementById("errMsg");
 
-/* ── Video.js init ── */
-const player = videojs("myVideo", {
-  fluid: true,
-  html5: {
-    vhs: {
-      overrideNative: true,          // force VHS (Video.js HTTP Streaming)
-      withCredentials: false,
-      allowSeeksWithinUnsafeLiveWindow: true,
-      handleManifestRedirects: true,
-    },
-    nativeVideoTracks: false,
-    nativeAudioTracks: false,
-    nativeTextTracks: false,
-  },
-  liveui: true,
-  errorDisplay: false,               // we handle errors ourselves
-});
+urlLabel.textContent = STREAM;
 
-/* Set source — Video.js VHS handles m3u8 natively */
-player.src({ src: STREAM, type: "application/x-mpegURL" });
+function setLive(on){ dot.className = "dot"+(on?" live":""); }
+function showOverlay(msg){ overlayMsg.textContent=msg||"กำลังโหลด…"; overlay.classList.remove("hide"); }
+function hideOverlay(){ overlay.classList.add("hide"); }
+function showErr(msg){ errbox.style.display="block"; errMsg.textContent=msg; }
+function hideErr(){ errbox.style.display="none"; }
 
-player.on("playing", () => { setLive(true); hideErr(); });
-player.on("pause",   () => setLive(false));
-player.on("ended",   () => setLive(false));
+let hls = null;
 
-player.on("loadedmetadata", () => {
-  const q = player.videoHeight();
-  if(q) document.getElementById("badge").textContent = q+"p";
-});
+function start(){
+  hideErr(); showOverlay("กำลังโหลด…");
+  if(hls){ hls.destroy(); hls=null; }
+  vid.removeAttribute("src");
 
-player.on("error", () => {
-  setLive(false);
-  /* ── Fallback: try raw HLS.js directly ── */
   if(Hls.isSupported()){
-    console.warn("[Player] Video.js error — falling back to HLS.js");
-    player.dispose();
-
-    const vid = document.createElement("video");
-    vid.id="rawVideo"; vid.controls=true; vid.playsinline=true;
-    vid.style.cssText="width:100%;aspect-ratio:16/9;border-radius:10px;background:#111";
-    document.getElementById("myVideo") && document.getElementById("myVideo").replaceWith(vid);
-
-    const hls = new Hls({
+    hls = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
+      maxBufferLength: 30,
       xhrSetup: xhr => { xhr.withCredentials = false; }
     });
     hls.loadSource(STREAM);
     hls.attachMedia(vid);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      hideErr(); setLive(true); vid.play().catch(()=>{});
-    });
-    hls.on(Hls.Events.FRAG_LOADED, () => { setLive(true); hideErr(); });
-    hls.on(Hls.Events.ERROR, (_,d) => {
-      if(d.fatal) handleFinalError(d.details);
-    });
-  } else {
-    handleFinalError("Browser does not support HLS.js");
-  }
-});
 
-function handleFinalError(detail){
-  setLive(false);
-  showErr(`
-    <strong>⚠️ เล่นไม่ได้</strong><br>
-    สาเหตุที่เป็นไปได้:
-    <ul>
-      <li>URL ต้นทางออฟไลน์อยู่ หรือ token หมดอายุ</li>
-      <li>เบราว์เซอร์บล็อก <strong>Mixed Content</strong> (HTTPS→HTTP) —
-        ลองเปิดในแท็บ HTTP ปกติ หรือปิด HTTPS upgrade ชั่วคราว</li>
-      <li>CORS: เซิร์ฟเวอร์ต้นทางไม่อนุญาต cross-origin request</li>
-    </ul>
-    <br>detail: <code>${detail}</code><br><br>
-    <a href="${STREAM}" target="_blank">เปิด URL ตรงใน Tab ใหม่</a>
-  `);
+    hls.on(Hls.Events.MANIFEST_PARSED, (_,d) => {
+      hideErr();
+      const top = d.levels[d.levels.length-1];
+      if(top?.height) badge.textContent = top.height+"p";
+      vid.play().catch(()=>{});
+    });
+
+    hls.on(Hls.Events.FRAG_LOADED, ()=>{ hideOverlay(); setLive(true); hideErr(); });
+
+    hls.on(Hls.Events.ERROR, (_,d) => {
+      if(d.fatal){
+        setLive(false);
+        if(d.type === Hls.ErrorTypes.MEDIA_ERROR){
+          showOverlay("กำลัง recover…");
+          hls.recoverMediaError();
+        } else {
+          showErr("โหลดสตรีมไม่ได้: "+d.details+" — ลอง token อาจหมดอายุ");
+        }
+      }
+    });
+
+  } else if(vid.canPlayType("application/vnd.apple.mpegurl")){
+    // Safari native HLS
+    vid.src = STREAM;
+    vid.addEventListener("loadedmetadata", ()=>{ hideOverlay(); vid.play().catch(()=>{}); },{once:true});
+    vid.addEventListener("error", ()=>{ showErr("เล่นไม่ได้บน Safari — ลองใหม่"); },{once:true});
+  } else {
+    showErr("เบราว์เซอร์ไม่รองรับ HLS");
+  }
 }
 
-/* Auto-play on load */
-player.ready(() => { player.play().catch(()=>{}); });
+vid.addEventListener("playing", ()=>{ hideOverlay(); setLive(true); hideErr(); });
+vid.addEventListener("waiting", ()=>{ showOverlay("กำลังบัฟเฟอร์…"); });
+vid.addEventListener("pause",   ()=> setLive(false));
+
+start();
 </script>
 </body>
 </html>
