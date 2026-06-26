@@ -4,8 +4,6 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Stream Player</title>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video-js.min.css" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.10.0/video.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -17,63 +15,35 @@
       justify-content:center;padding:20px 14px;
     }
     .wrap{width:100%;max-width:960px}
-
-    /* ── top bar ── */
-    .topbar{
-      display:flex;align-items:center;justify-content:space-between;
-      margin-bottom:10px;
-    }
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .topbar h1{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
     .dot{width:9px;height:9px;border-radius:50%;background:#333;transition:background .4s}
     .dot.live{background:#e63946;box-shadow:0 0 7px #e6394699;animation:blink 1.8s ease-in-out infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-    /* ── proxy config box ── */
-    .config{
-      background:#0e0e1a;border:1px solid #1e1e3a;border-radius:10px;
-      padding:16px 18px;margin-bottom:14px;
+    .video-wrap{
+      position:relative;width:100%;aspect-ratio:16/9;
+      background:#111;border-radius:10px;overflow:hidden;
+      box-shadow:0 8px 48px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);
     }
-    .config h2{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#555;margin-bottom:12px}
-    .row{display:flex;gap:8px;align-items:stretch;margin-bottom:8px;flex-wrap:wrap}
-    .row label{font-size:.73rem;color:#666;min-width:90px;display:flex;align-items:center}
-    .row input{
-      flex:1;min-width:200px;
-      background:#13131f;border:1px solid #2a2a4a;border-radius:6px;
-      color:#c8c8e8;font-size:.78rem;padding:7px 10px;outline:none;
-      font-family:monospace;
-      transition:border-color .2s;
-    }
-    .row input:focus{border-color:#5555aa}
-    .btn-group{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
-    button{
-      padding:8px 18px;border:none;border-radius:6px;
-      font-size:.75rem;font-weight:700;letter-spacing:.07em;
-      cursor:pointer;transition:background .2s,opacity .2s;
-    }
-    .btn-play{background:#e63946;color:#fff}
-    .btn-play:hover{background:#c1121f}
-    .btn-direct{background:#1e1e3a;color:#7878cc;border:1px solid #2e2e5a}
-    .btn-direct:hover{background:#2a2a4a}
-    .hint{font-size:.68rem;color:#3a3a5a;margin-top:8px;line-height:1.6}
-    .hint code{background:#13131f;padding:1px 5px;border-radius:3px;color:#6666aa;font-size:.7rem}
+    video{width:100%;height:100%;display:block;background:#000}
 
-    /* ── player ── */
-    .video-js{
-      width:100%!important;aspect-ratio:16/9;
-      border-radius:10px;overflow:hidden;background:#111;
+    .overlay{
+      position:absolute;inset:0;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      background:rgba(7,7,13,.8);transition:opacity .3s;
     }
-    .vjs-big-play-button{
-      top:50%!important;left:50%!important;
-      transform:translate(-50%,-50%)!important;
-      border-radius:50%!important;
-      width:64px!important;height:64px!important;
-      line-height:64px!important;
-      border:2px solid rgba(255,255,255,.2)!important;
-      background:rgba(10,10,20,.75)!important;
+    .overlay.hide{opacity:0;pointer-events:none}
+    .spinner{
+      width:46px;height:46px;
+      border:3px solid rgba(255,255,255,.08);
+      border-top-color:#e63946;border-radius:50%;
+      animation:spin .8s linear infinite;margin-bottom:12px;
     }
-    .vjs-big-play-button:hover{background:rgba(230,57,70,.9)!important}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .overlay p{font-size:.78rem;color:#555;letter-spacing:.06em}
 
-    /* ── status bar ── */
     .statusbar{
       margin-top:9px;display:flex;gap:8px;
       font-size:.69rem;font-family:monospace;
@@ -82,178 +52,119 @@
     .statusbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
     .badge{color:#4caf7d;font-weight:700;flex-shrink:0}
 
-    /* ── error ── */
     #errbox{
       display:none;margin-top:10px;padding:14px 18px;
       background:#1a0a0a;border:1px solid #4a1010;border-radius:8px;
       font-size:.78rem;line-height:1.7;color:#e07070;
     }
     #errbox code{background:#2a1010;padding:1px 5px;border-radius:3px;font-size:.72rem}
-    #errbox a{color:#e63946}
+    .retry{
+      margin-top:8px;padding:7px 18px;background:#e63946;color:#fff;
+      border:none;border-radius:6px;font-size:.75rem;font-weight:700;
+      cursor:pointer;
+    }
+    .retry:hover{background:#c1121f}
   </style>
 </head>
 <body>
 <div class="wrap">
-
-  <!-- top -->
   <div class="topbar">
     <h1>▶ Stream Player</h1>
     <div class="dot" id="dot"></div>
   </div>
 
-  <!-- proxy config -->
-  <div class="config">
-    <h2>⚙️ ตั้งค่า Proxy</h2>
-
-    <div class="row">
-      <label>Proxy Host</label>
-      <input type="text" id="proxyHost" value="localhost" placeholder="localhost หรือ IP เครื่องคุณ"/>
+  <div class="video-wrap">
+    <video id="vid" controls playsinline></video>
+    <div class="overlay" id="overlay">
+      <div class="spinner"></div>
+      <p id="overlayMsg">กำลังโหลด…</p>
     </div>
-    <div class="row">
-      <label>Proxy Port</label>
-      <input type="text" id="proxyPort" value="8080" placeholder="8080"/>
-    </div>
-    <div class="row">
-      <label>Stream Path</label>
-      <input type="text" id="streamPath" value="/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8"/>
-    </div>
-
-    <div class="btn-group">
-      <button class="btn-play" onclick="loadStream()">▶ เล่นผ่าน Proxy</button>
-      <button class="btn-direct" onclick="loadDirect()">⚡ เล่นตรง (file:// เท่านั้น)</button>
-    </div>
-
-    <p class="hint">
-      ต้องรัน <code>node proxy.js</code> ที่เครื่องก่อน แล้วกด <strong>เล่นผ่าน Proxy</strong><br>
-      หากเปิดไฟล์นี้ด้วย <code>file://</code> สามารถกด <strong>เล่นตรง</strong> ได้เลยโดยไม่ต้อง proxy
-    </p>
   </div>
-
-  <!-- player -->
-  <video id="myVideo" class="video-js vjs-default-skin vjs-big-play-centered"
-    controls preload="auto" playsinline></video>
 
   <div class="statusbar">
     <span id="urlLabel">—</span>
     <span class="badge" id="badge">HLS</span>
   </div>
 
-  <div id="errbox" id="errbox"></div>
-
+  <div id="errbox">
+    <span id="errMsg"></span><br>
+    <button class="retry" onclick="start()">🔄 ลองใหม่</button>
+  </div>
 </div>
 
 <script>
-const DIRECT = "http://43.229.132.25:80";
-const PATH   = () => document.getElementById("streamPath").value.trim();
-const PROXY  = () => {
-  return "https://stream-prpxy-production.up.railway.app";
-};
+const STREAM = "http://43.229.132.25:80/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8";
 
-let player = null;
+const vid       = document.getElementById("vid");
+const overlay   = document.getElementById("overlay");
+const overlayMsg= document.getElementById("overlayMsg");
+const dot       = document.getElementById("dot");
+const urlLabel  = document.getElementById("urlLabel");
+const badge     = document.getElementById("badge");
+const errbox    = document.getElementById("errbox");
+const errMsg    = document.getElementById("errMsg");
 
-function setLive(on){
-  document.getElementById("dot").className = "dot" + (on?" live":"");
-}
-function hideErr(){ document.getElementById("errbox").style.display="none"; }
-function showErr(html){
-  const b=document.getElementById("errbox");
-  b.innerHTML=html; b.style.display="block";
-}
+urlLabel.textContent = STREAM;
 
-function loadStream(){ initPlayer(PROXY() + PATH(), "Proxy"); }
-function loadDirect(){ initPlayer(DIRECT + PATH(), "Direct"); }
+function setLive(on){ dot.className = "dot"+(on?" live":""); }
+function showOverlay(msg){ overlayMsg.textContent=msg||"กำลังโหลด…"; overlay.classList.remove("hide"); }
+function hideOverlay(){ overlay.classList.add("hide"); }
+function showErr(msg){ errbox.style.display="block"; errMsg.textContent=msg; }
+function hideErr(){ errbox.style.display="none"; }
 
-function initPlayer(src, label){
-  hideErr();
-  document.getElementById("urlLabel").textContent = src;
+let hls = null;
 
-  // destroy old player
-  if(player){ try{ player.dispose(); }catch(e){} player=null; }
+function start(){
+  hideErr(); showOverlay("กำลังโหลด…");
+  if(hls){ hls.destroy(); hls=null; }
+  vid.removeAttribute("src");
 
-  // rebuild video element (videojs removes it on dispose)
-  let vid = document.getElementById("myVideo");
-  if(!vid){
-    vid = document.createElement("video");
-    vid.id="myVideo";
-    vid.className="video-js vjs-default-skin vjs-big-play-centered";
-    vid.setAttribute("controls","");
-    vid.setAttribute("preload","auto");
-    vid.setAttribute("playsinline","");
-    document.querySelector(".statusbar").insertAdjacentElement("beforebegin", vid);
+  if(Hls.isSupported()){
+    hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      maxBufferLength: 30,
+      xhrSetup: xhr => { xhr.withCredentials = false; }
+    });
+    hls.loadSource(STREAM);
+    hls.attachMedia(vid);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, (_,d) => {
+      hideErr();
+      const top = d.levels[d.levels.length-1];
+      if(top?.height) badge.textContent = top.height+"p";
+      vid.play().catch(()=>{});
+    });
+
+    hls.on(Hls.Events.FRAG_LOADED, ()=>{ hideOverlay(); setLive(true); hideErr(); });
+
+    hls.on(Hls.Events.ERROR, (_,d) => {
+      if(d.fatal){
+        setLive(false);
+        if(d.type === Hls.ErrorTypes.MEDIA_ERROR){
+          showOverlay("กำลัง recover…");
+          hls.recoverMediaError();
+        } else {
+          showErr("โหลดสตรีมไม่ได้: "+d.details+" — ลอง token อาจหมดอายุ");
+        }
+      }
+    });
+
+  } else if(vid.canPlayType("application/vnd.apple.mpegurl")){
+    // Safari native HLS
+    vid.src = STREAM;
+    vid.addEventListener("loadedmetadata", ()=>{ hideOverlay(); vid.play().catch(()=>{}); },{once:true});
+    vid.addEventListener("error", ()=>{ showErr("เล่นไม่ได้บน Safari — ลองใหม่"); },{once:true});
+  } else {
+    showErr("เบราว์เซอร์ไม่รองรับ HLS");
   }
-
-  player = videojs("myVideo",{
-    fluid:true,
-    html5:{
-      vhs:{
-        overrideNative:true,
-        withCredentials:false,
-        allowSeeksWithinUnsafeLiveWindow:true,
-        handleManifestRedirects:true,
-      },
-      nativeVideoTracks:false,
-      nativeAudioTracks:false,
-      nativeTextTracks:false,
-    },
-    liveui:true,
-    errorDisplay:false,
-  });
-
-  player.src({ src, type:"application/x-mpegURL" });
-
-  player.on("playing", ()=>{ setLive(true); hideErr(); });
-  player.on("pause",   ()=> setLive(false));
-  player.on("ended",   ()=> setLive(false));
-  player.on("loadedmetadata", ()=>{
-    const q=player.videoHeight();
-    if(q) document.getElementById("badge").textContent=q+"p";
-  });
-
-  player.on("error", ()=>{
-    setLive(false);
-    console.warn("["+label+"] Video.js failed → try HLS.js");
-    fallbackHlsJs(src, label);
-  });
-
-  player.ready(()=>{ player.play().catch(()=>{}); });
 }
 
-function fallbackHlsJs(src, label){
-  if(!Hls.isSupported()){ showFinalErr(label,"HLS.js not supported"); return; }
+vid.addEventListener("playing", ()=>{ hideOverlay(); setLive(true); hideErr(); });
+vid.addEventListener("waiting", ()=>{ showOverlay("กำลังบัฟเฟอร์…"); });
+vid.addEventListener("pause",   ()=> setLive(false));
 
-  // replace video element
-  let old = document.getElementById("myVideo");
-  const vid = document.createElement("video");
-  vid.id="myVideo"; vid.controls=true; vid.playsinline=true;
-  vid.style.cssText="width:100%;aspect-ratio:16/9;border-radius:10px;background:#111;display:block";
-  if(old) old.replaceWith(vid); else document.querySelector(".statusbar").insertAdjacentElement("beforebegin",vid);
-
-  const hls = new Hls({
-    enableWorker:true,
-    lowLatencyMode:true,
-    xhrSetup: xhr=>{ xhr.withCredentials=false; }
-  });
-  hls.loadSource(src);
-  hls.attachMedia(vid);
-  hls.on(Hls.Events.MANIFEST_PARSED, ()=>{ setLive(true); hideErr(); vid.play().catch(()=>{}); });
-  hls.on(Hls.Events.FRAG_LOADED,     ()=>{ setLive(true); });
-  hls.on(Hls.Events.ERROR, (_,d)=>{
-    if(d.fatal) showFinalErr(label, d.details);
-  });
-}
-
-function showFinalErr(label, detail){
-  setLive(false);
-  showErr(`
-    <strong>⚠️ เล่นไม่ได้ [${label}]</strong> — <code>${detail}</code><br><br>
-    สาเหตุที่พบบ่อย:<br>
-    &nbsp;• Proxy ยังไม่ได้รัน → เปิด terminal แล้วพิมพ์ <code>node proxy.js</code><br>
-    &nbsp;• Mixed Content บล็อก → ลองเปิดไฟล์นี้ด้วย <code>file://</code> แล้วกด "เล่นตรง"<br>
-    &nbsp;• Token หมดอายุ → ขอ URL ใหม่จากเซิร์ฟเวอร์<br>
-    &nbsp;• CORS → ตรวจ console ว่า upstream ส่ง CORS header มาไหม<br><br>
-    <a href="${document.getElementById('urlLabel').textContent}" target="_blank">🔗 เปิด URL ในแท็บใหม่</a>
-  `);
-}
+start();
 </script>
 </body>
 </html>
