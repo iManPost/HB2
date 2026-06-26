@@ -143,8 +143,10 @@
 </div>
 
 <script>
+const DIRECT = "http://43.229.132.25:80";
+const PATH   = () => document.getElementById("streamPath").value.trim();
 const PROXY  = () => {
-  return "https://stream-prpxy-production.up.railway.app/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8";
+  return "https://stream-prpxy-production.up.railway.app";
 };
 
 let player = null;
