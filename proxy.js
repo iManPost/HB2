@@ -1,60 +1,83 @@
-// proxy.js
-// รัน: node proxy.js
-// ต้องการ Node.js เท่านั้น ไม่ต้อง install อะไรเพิ่ม
-
-const http = require("http");
-const url  = require("url");
+const http  = require("http");
+const https = require("https");
 
 const UPSTREAM_HOST = "43.229.132.25";
 const UPSTREAM_PORT = 80;
-const PROXY_PORT    = 8080;
+const PORT = process.env.PORT || 8080;
 
-http.createServer((req, res) => {
-  // Allow any origin (GitHub Pages, file://, localhost)
+// Railway public URL — ใช้ rewrite ใน m3u8
+const PUBLIC_BASE = process.env.PUBLIC_URL || "https://stream-prpxy-production.up.railway.app";
+
+function addCors(res) {
   res.setHeader("Access-Control-Allow-Origin",  "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "*");
   res.setHeader("Access-Control-Expose-Headers","*");
+}
 
+http.createServer((req, res) => {
+  addCors(res);
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
-
-  const targetPath = req.url; // เช่น /play/xxx/m3u8
 
   const options = {
     hostname : UPSTREAM_HOST,
     port     : UPSTREAM_PORT,
-    path     : targetPath,
-    method   : req.method,
-    headers  : {
-      ...req.headers,
-      host: UPSTREAM_HOST + ":" + UPSTREAM_PORT,
-    },
+    path     : req.url,
+    method   : "GET",
+    headers  : { host: UPSTREAM_HOST + ":" + UPSTREAM_PORT },
   };
 
-  // ลบ header ที่ทำให้ปัญหา
-  delete options.headers["origin"];
-  delete options.headers["referer"];
-
   const proxy = http.request(options, (upstream) => {
-    const headers = { ...upstream.headers };
-    // เพิ่ม CORS ใน response ด้วย
-    headers["access-control-allow-origin"] = "*";
+    const ct = upstream.headers["content-type"] || "";
+    const isM3U8 = ct.includes("mpegurl") || req.url.endsWith(".m3u8") || req.url.includes(".m3u8");
 
-    res.writeHead(upstream.statusCode, headers);
-    upstream.pipe(res, { end: true });
+    if (isM3U8) {
+      // รวบ body ก่อน แล้ว rewrite URL
+      let body = "";
+      upstream.setEncoding("utf8");
+      upstream.on("data", chunk => body += chunk);
+      upstream.on("end", () => {
+        // เปลี่ยน http://43.229.132.25:80 → https://railway.app (ผ่าน proxy)
+        const rewritten = body
+          .split("\n")
+          .map(line => {
+            const t = line.trim();
+            if (!t || t.startsWith("#")) return line;
+            // absolute URL → rewrite
+            if (t.startsWith("http://") || t.startsWith("https://")) {
+              const u = new URL(t);
+              return PUBLIC_BASE + u.pathname + u.search;
+            }
+            // relative path → prepend proxy base + same directory
+            return line;
+          })
+          .join("\n");
+
+        const headers = {
+          "content-type": "application/vnd.apple.mpegurl",
+          "access-control-allow-origin": "*",
+          "cache-control": "no-cache",
+        };
+        res.writeHead(200, headers);
+        res.end(rewritten);
+      });
+    } else {
+      // binary (ts segments etc.) — pipe ตรง
+      const headers = { ...upstream.headers, "access-control-allow-origin": "*" };
+      res.writeHead(upstream.statusCode, headers);
+      upstream.pipe(res, { end: true });
+    }
   });
 
   proxy.on("error", (err) => {
     console.error("[Proxy Error]", err.message);
-    if (!res.headersSent) {
-      res.writeHead(502, { "Content-Type": "text/plain" });
-    }
+    if (!res.headersSent) res.writeHead(502, { "Content-Type": "text/plain" });
     res.end("Proxy error: " + err.message);
   });
 
   req.pipe(proxy, { end: true });
 
-}).listen(PROXY_PORT, () => {
-  console.log("✅ Proxy running → http://localhost:" + PROXY_PORT);
-  console.log("   Stream URL  → http://localhost:" + PROXY_PORT + "/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8");
+}).listen(PORT, () => {
+  console.log("✅ Proxy running on port " + PORT);
+  console.log("   PUBLIC_URL =", PUBLIC_BASE);
 });
